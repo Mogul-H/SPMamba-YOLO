@@ -1,96 +1,136 @@
-# [AAAI2025] Mamba YOLO: A Simple Baseline for Object Detection with State Space Model
+# SPMamba-YOLO
 
-![Python 3.11](https://img.shields.io/badge/python-3.11-g) ![pytorch 2.3.0](https://img.shields.io/badge/pytorch-2.3.0-blue.svg) [![docs](https://img.shields.io/badge/docs-latest-blue)](README.md)
+An object detection project built on a customized Ultralytics YOLO codebase. The repository includes a Mamba-YOLO-style model configuration, training and validation scripts, and a selective-scan implementation.
 
+> **Note:** This repository contains the implementation and configuration files. Dataset paths and checkpoint paths in the supplied scripts are machine-specific and must be updated before running on another computer.
 
-<div align="center">
-  <img src="./asserts/mambayolo.jpg" width="1200px"/>
-</div>
+## Contents
 
-## Model Zoo
+- `ultralytics/` — customized Ultralytics codebase.
+- `ultralytics/cfg/models/mamba-yolo/SPMamba-YOLO.yaml` — SPMamba-YOLO model configuration.
+- `mbyolo_train.py` — command-line training entry point.
+- `val.py` — validation example; edit the checkpoint and dataset paths before use.
+- `selective_scan/` — selective-scan implementation and tests.
+- `asserts/` — project figures and visual assets.
+- `yolov8n.pt` — YOLOv8n checkpoint included in the repository.
 
-We've pre-trained YOLO-World-T/M/L from scratch and evaluate on the `MSCOCO2017 val`. 
+## Model configuration
 
-### Inference on MSCOCO2017 dataset
+The model definition is located at:
 
+```text
+ultralytics/cfg/models/mamba-yolo/SPMamba-YOLO.yaml
+```
 
-| model | Params| FLOPs | ${AP}^{val}$ | ${AP}_{{50}}^{val}$ | ${AP}_{{75}}^{val}$ | ${AP}_{{S}}^{val}$ | ${AP}_{{M}}^{val}$ | ${AP}_{{L}}^{val}$ |
-| :------------------------------------------------------------------------------------------------------------------- | :------------------- | :----------------- | :--------------: | :------------: | :------------: | :------------: | :-------------: | :------------: |
-| [Mamba YOLO-T](./ultralytics/cfg/models/mamba-yolo/Mamba-YOLO-T.yaml) | 5.8M | 13.2G |       44.5       |          61.2           |          48.2           |          24.7          |          48.8          |          62.0          |
-| [Mamba YOLO-M](./ultralytics/cfg/models/mamba-yolo/Mamba-YOLO-B.yaml) | 19.1M | 45.4G  |       49.1       |          66.5           |          53.5           |          30.6          |          54.0          |          66.4          |
-| [Mamba YOLO-L](./ultralytics/cfg/models/mamba-yolo/Mamba-YOLO-L.yaml)  | 57.6M | 156.2G |       52.1       |          69.8           |          56.5           |          34.1          |          57.3          |          68.1          |
+The YAML configuration specifies a Mamba-YOLO-style backbone using modules such as `SimpleStem`, `VSSBlock`, `VisionClueMerge`, `SPPELAN`, and `PSA`. Its feature-fusion head uses `XSSBlock` modules and a detection head operating on three feature scales (P3, P4, and P5).
 
+The provided configuration sets `nc: 80` and defines a `T` scale. If your dataset has a different number of classes, configure `nc` and the dataset YAML consistently with your task.
 
+## Requirements
 
+The project uses Python and PyTorch through the customized Ultralytics package. Exact compatible versions may depend on your CUDA, GPU driver, and selective-scan implementation.
 
-## Getting started
+Recommended preparation:
 
-### 1. Installation
+- Python 3.8 or later, consistent with `pyproject.toml`.
+- A compatible PyTorch and CUDA installation if training on an NVIDIA GPU.
+- The Python dependencies declared by this repository's `pyproject.toml`.
+- Any additional dependencies required by the selective-scan modules in your environment.
 
-Mamba YOLO is developed based on `torch==2.3.0` `pytorch-cuda==12.1` and `CUDA Version==12.6`. 
-
-#### 2.Clone Project 
+Install the project in editable mode from the repository root:
 
 ```bash
-git clone https://github.com/HZAI-ZJNU/Mamba-YOLO.git
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-#### 3.Create and activate a conda environment.
+Install a PyTorch build compatible with your system before training if the default dependency resolution does not match your CUDA environment. If importing a custom scan operator fails, check the `selective_scan/` setup instructions and the compatibility of its dependencies with your installed PyTorch/CUDA versions.
+
+## Prepare your dataset
+
+Create a dataset YAML file describing the training and validation image paths and class names. For example:
+
+```yaml
+path: /path/to/your/dataset
+train: images/train
+val: images/val
+
+names:
+  0: class_a
+  1: class_b
+```
+
+Replace the example paths and class names with those of your dataset. Make sure the number of class names matches the `nc` value in the model configuration.
+
+## Training
+
+The training script is `mbyolo_train.py`. It accepts arguments for the dataset YAML, model configuration, batch size, image size, epochs, optimizer, device, and output directory.
+
+Example:
+
 ```bash
-conda create -n mambayolo -y python=3.11
-conda activate mambayolo
+python mbyolo_train.py \
+  --data /path/to/your/dataset/data.yaml \
+  --config ultralytics/cfg/models/mamba-yolo/SPMamba-YOLO.yaml \
+  --batch_size 4 \
+  --imgsz 640 \
+  --epochs 100 \
+  --device 0 \
+  --project output_dir \
+  --name spmamba-yolo
 ```
 
-#### 4. Install torch
+On Windows, the same command can be entered on one line:
 
-```bash
-pip3 install torch===2.3.0 torchvision torchaudio
+```bat
+python mbyolo_train.py --data "D:\path\to\dataset\data.yaml" --config "ultralytics\cfg\models\mamba-yolo\SPMamba-YOLO.yaml" --batch_size 4 --imgsz 640 --epochs 100 --device 0 --project output_dir --name spmamba-yolo
 ```
 
-#### 5. Install Dependencies
-```bash
-pip install seaborn thop timm einops
-cd selective_scan && pip install . && cd ..
-pip install -v -e .
+**Important:** The current `mbyolo_train.py` defines a machine-specific default dataset path. Always pass `--data` explicitly when running on another machine. The script's default values are batch size `4`, image size `640`, epochs `100`, optimizer `SGD`, workers `1`, and device `0`.
+
+The script saves training outputs under the directory specified by `--project` and `--name`.
+
+## Validation
+
+The supplied `val.py` is an example, not a portable out-of-the-box command: its checkpoint and dataset paths are hard-coded to local Windows paths. Update them before use, or validate through the Ultralytics Python API:
+
+```python
+from ultralytics import YOLO
+
+model = YOLO("path/to/best.pt")
+metrics = model.val(
+    data="path/to/data.yaml",
+    split="val",
+    imgsz=640,
+    batch=16,
+)
 ```
 
-#### 6. Prepare MSCOCO2017 Dataset
-Make sure your dataset structure as follows:
-```
-├── coco
-│   ├── annotations
-│   │   ├── instances_train2017.json
-│   │   └── instances_val2017.json
-│   ├── images
-│   │   ├── train2017
-│   │   └── val2017
-│   ├── labels
-│   │   ├── train2017
-│   │   ├── val2017
-```
+Use the checkpoint produced by your training run and the same dataset definition used for training.
 
-#### 7. Training Mamba-YOLO-T
-```bash
-python mbyolo_train.py --task train --data ultralytics/cfg/datasets/coco.yaml \
- --config ultralytics/cfg/models/mamba-yolo/Mamba-YOLO-T.yaml \
---amp  --project ./output_dir/mscoco --name mambayolo_n
-```
+## Selective scan
 
-## Acknowledgement
+The `selective_scan/` directory contains a selective-scan implementation and related tests. Refer to `selective_scan/README.md` and `selective_scan/setup.py` for implementation-specific details and setup requirements. Test commands and hardware requirements can vary with the selected implementation and installed dependencies.
 
-This repo is modified from open source real-time object detection codebase [Ultralytics](https://github.com/ultralytics/ultralytics). The selective-scan from [VMamba](https://github.com/MzeroMiko/VMamba).
+## Reproducibility notes
 
-## Citations
-If you find [Mamba-YOLO](https://github.com/HZAI-ZJNU/Mamba-YOLO) is useful in your research or applications, please consider giving us a star 🌟 and citing it.
+- Update all dataset and checkpoint paths before running the scripts.
+- Record the Python, PyTorch, CUDA, GPU, and dependency versions used for each experiment.
+- Keep the dataset YAML, training arguments, and checkpoint associated with each run.
+- Results depend on the dataset, random seeds, software versions, and hardware configuration; no benchmark results are claimed by this README.
 
-```bibtex
-@misc{wang2024mambayolossmsbasedyolo,
-      title={Mamba YOLO: SSMs-Based YOLO For Object Detection}, 
-      author={Zeyu Wang and Chen Li and Huiying Xu and Xinzhong Zhu},
-      year={2024},
-      eprint={2406.05835},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2406.05835}, 
-}
-```
+## License
+
+The repository includes a `LICENSE` file. Review it before using, modifying, or redistributing this code. The customized codebase includes Ultralytics components; check the applicable license terms and any licenses for third-party components used in your deployment.
+
+## 中文说明
+
+SPMamba-YOLO 是一个基于定制版 Ultralytics YOLO 代码库的目标检测项目。仓库包含 SPMamba-YOLO 模型配置、训练脚本、验证示例以及 selective scan 相关实现。
+
+1. **修改数据集路径：** 训练时通过 `--data` 指定你自己的数据集 YAML 文件。
+2. **确认类别数：** 数据集类别数量应与模型配置中的 `nc` 保持一致。
+3. **安装依赖：** 在仓库根目录执行 `python -m pip install -e .`；PyTorch/CUDA 版本应与你的硬件环境兼容。
+4. **开始训练：** 参考上方 Training 部分的命令。
+5. **运行验证：** 使用你训练得到的权重，并将数据集 YAML 路径替换为实际路径。
+
+当前训练和验证脚本中存在本机路径，因此不能直接假定它们在其他计算机上无需修改即可运行。请在正式实验前检查路径、依赖版本及许可证要求。
